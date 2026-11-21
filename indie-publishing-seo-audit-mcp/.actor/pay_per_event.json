@@ -1,0 +1,9 @@
+{
+  "events": {
+    "seo-audit": {
+      "eventTitle": "Metadata or Programmatic SEO Compliance Audit",
+      "eventDescription": "Charged only on valid, successful SEO/KDP/Udemy compliance audits or schema generation.",
+      "eventPriceUsd": 0.004
+    }
+  }
+}

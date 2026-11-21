@@ -1,0 +1,14 @@
+{
+  "events": {
+    "blueprint-query": {
+      "eventTitle": "Exam Blueprint or Comparison Lookup",
+      "eventDescription": "Charged only on valid, successful MCP tool responses returning structured exam domain data or certification comparisons.",
+      "eventPriceUsd": 0.002
+    },
+    "scenario-search": {
+      "eventTitle": "Vetted Scenario Question Retrieval",
+      "eventDescription": "Charged only on valid, successful scenario retrieval returning clean structured JSON with explanations and exam hacks.",
+      "eventPriceUsd": 0.005
+    }
+  }
+}

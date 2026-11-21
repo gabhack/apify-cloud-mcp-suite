@@ -1,0 +1,9 @@
+{
+  "events": {
+    "cost-estimate": {
+      "eventTitle": "Multi-Cloud Workload Cost Estimation & FinOps Audit",
+      "eventDescription": "Charged only on valid, successful cost estimates with deterministic breakdown and FinOps savings tips.",
+      "eventPriceUsd": 0.003
+    }
+  }
+}
