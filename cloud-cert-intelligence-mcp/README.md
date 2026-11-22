@@ -3,7 +3,7 @@
 Standby **Model Context Protocol (MCP)** server packaged for **Apify Store Pay-Per-Event** (`$0` hosting, `80%` developer revenue share, zero social media required).
 
 ## Tools Exposed (`/mcp`)
-1. `list_cloud_certifications` (`$0.002/call`) — Structured index of 8 current 2026–2027 AWS, Microsoft Azure (`AI-901`), and Google Cloud (`GenAI Leader`) exams.
+1. `list_cloud_certifications` (`$0.002/call`) — Structured index of 9 current 2026–2027 AWS (including Dec 2026 `DVA-C03`), Microsoft Azure (`AI-901`), and Google Cloud (`GenAI Leader`) exams.
 2. `get_exam_blueprint` (`$0.002/call`) — Official domain map, duration, passing threshold, and simulator deep-links.
 3. `search_sample_scenarios` (`$0.005/scenario`) — Concise, context-window-safe JSON scenarios with verified answers and Exam Hacks.
 
