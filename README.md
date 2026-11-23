@@ -6,7 +6,7 @@ Three lightweight, zero-bloat **Model Context Protocol (MCP)** Standby servers (
 
 | # | Actor Folder | Pricing (PPE) | What It Solves for AI Agents |
 |---|---|---|---|
-| 1 | [`cloud-cert-intelligence-mcp/`](./cloud-cert-intelligence-mcp/) | `$0.002`–`$0.005` / call | Returns structured 2026–2027 **AWS (`DVA-C03`, `AIF-C01`, `MLA-C01`, `DEA-C01`, `DVA-C02`, `SAA-C03`, `CLF-C02`), Azure `AI-901`, and Google Cloud `GenAI Leader`** exam blueprints, domain maps, and vetted scenario questions. Backed by [CloudCert Lab](https://gabhack.github.io/cloudcert-lab/). |
+| 1 | [`cloud-cert-intelligence-mcp/`](./cloud-cert-intelligence-mcp/) | `$0.002`–`$0.005` / call | Returns structured 2026–2027 **AWS (`AIP-C01`, `DVA-C03`, `AIF-C01`, `MLA-C01`, `DEA-C01`, `DVA-C02`, `SAA-C03`, `CLF-C02`), Azure `AI-901`, and Google Cloud `GenAI Leader`** blueprints, vetted scenario questions, and pass-readiness risk calculations. Backed by [CloudCert Lab](https://gabhack.github.io/cloudcert-lab/). |
 | 2 | [`cloud-finops-cost-estimator-mcp/`](./cloud-finops-cost-estimator-mcp/) | `$0.003` / call | Estimates monthly AWS Lambda/API Gateway/S3 serverless spend and compares LLM token spend across **AWS Bedrock, Azure AI Foundry, and Google Cloud Gemini** with actionable FinOps tips. |
 | 3 | [`indie-publishing-seo-audit-mcp/`](./indie-publishing-seo-audit-mcp/) | `$0.004` / call | Audits **Amazon KDP** 7-box backend keywords (50-char cap, zero title duplication, prohibited terms) and **Udemy** course title/subtitle character limits & keyword coverage. |
 

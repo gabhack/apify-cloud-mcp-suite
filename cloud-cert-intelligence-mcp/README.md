@@ -4,8 +4,9 @@ Standby **Model Context Protocol (MCP)** server packaged for **Apify Store Pay-P
 
 ## Tools Exposed (`/mcp`)
 1. `list_cloud_certifications` (`$0.002/call`) — Structured index of 9 current 2026–2027 AWS (including Dec 2026 `DVA-C03`), Microsoft Azure (`AI-901`), and Google Cloud (`GenAI Leader`) exams.
-2. `get_exam_blueprint` (`$0.002/call`) — Official domain map, duration, passing threshold, and simulator deep-links.
+2. `get_exam_blueprint` (`$0.002/call`) — Official domain map, duration, exam fee, passing threshold, and simulator deep-links (including `AWS AIP-C01` Generative AI Developer – Professional).
 3. `search_sample_scenarios` (`$0.005/scenario`) — Concise, context-window-safe JSON scenarios with verified answers and Exam Hacks.
+4. `calculate_pass_readiness` (`$0.002/call`) — Computes pass probability, daily question cadence, and exam retake fee risk (`$99`–`$300`) before test day.
 
 ## Margin & Quality Guardrails (2026 Best Practices)
 - Strict input validation runs **before** `charge_apify_event()` so AI agent guessing loops never trigger bill shock.

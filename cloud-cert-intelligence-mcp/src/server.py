@@ -64,7 +64,54 @@ TOOLS = [
             "required": ["exam"],
         },
     },
+    {
+        "name": "calculate_pass_readiness",
+        "description": "Calculate first-attempt pass probability, daily question cadence, and exam retake fee risk ($99-$300) for AWS (including DVA-C03 & AIP-C01), Azure AI-901, or GCP GenAI Leader.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "exam": {"type": "string", "description": "Exam slug or code (e.g. DVA-C03, AIP-C01, AI-901, SAA-C03)"},
+                "current_score_pct": {"type": "number", "minimum": 0, "maximum": 100},
+                "days_until_exam": {"type": "integer", "minimum": 1, "maximum": 180},
+                "study_hours_per_week": {"type": "number", "minimum": 1, "maximum": 60},
+            },
+            "required": ["exam", "current_score_pct", "days_until_exam", "study_hours_per_week"],
+        },
+    },
 ]
+
+EXAM_FEES_USD = {
+    "azure-ai-901": 99,
+    "gcp-genai-leader": 99,
+    "aws-aif-c01": 100,
+    "aws-clf-c02": 100,
+    "aws-mla-c01": 150,
+    "aws-dea-c01": 150,
+    "aws-dva-c02": 150,
+    "aws-dva-c03": 150,
+    "aws-saa-c03": 150,
+    "aws-aip-c01": 300,
+}
+
+EXTRA_BLUEPRINTS = {
+    "aws-aip-c01": {
+        "slug": "aws-aip-c01",
+        "vendor": "AWS",
+        "code": "AIP-C01",
+        "title": "AWS Certified Generative AI Developer – Professional (AIP-C01)",
+        "duration_min": 180,
+        "pass_pct": 75,
+        "domains": {
+            "1": "Domain 1: Foundation Model Integration, Data Management, and Compliance (31%)",
+            "2": "Domain 2: Implementation and Integration (26%)",
+            "3": "Domain 3: AI Safety, Security, and Governance (20%)",
+            "4": "Domain 4: Operational Efficiency and Optimization (12%)",
+            "5": "Domain 5: Testing, Validation, and Troubleshooting (11%)",
+        },
+        "guide_url": "https://gabhack.github.io/cloudcert-lab/exams/aws-aip-c01-guide/",
+        "free_simulator_url": "https://gabhack.github.io/cloudcert-lab/?tool=calculator&cert=aws-aip-c01",
+    }
+}
 
 
 def load_catalog() -> list[dict[str, Any]]:
@@ -72,7 +119,7 @@ def load_catalog() -> list[dict[str, Any]]:
     return raw.get("certs", [])
 
 
-def resolve_cert(exam_query: str) -> dict[str, Any] | None:
+def resolve_cert(exam_query: str, include_extra: bool = False) -> dict[str, Any] | None:
     q = (exam_query or "").strip().lower()
     if not q:
         return None
@@ -81,6 +128,10 @@ def resolve_cert(exam_query: str) -> dict[str, Any] | None:
             return cert
         if q in cert["title"].lower():
             return cert
+    if include_extra:
+        for extra in EXTRA_BLUEPRINTS.values():
+            if q in (extra["slug"].lower(), extra["code"].lower()) or q in extra["title"].lower():
+                return extra
     return None
 
 
@@ -115,7 +166,7 @@ def handle_tool_call(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         return {"ok": True, "charge": charge, "certifications": summary}
 
     if name == "get_exam_blueprint":
-        cert = resolve_cert(arguments.get("exam", ""))
+        cert = resolve_cert(arguments.get("exam", ""), include_extra=True)
         if not cert:
             return {"ok": False, "error": "Unknown exam code or slug. Call list_cloud_certifications first."}
         charge = charge_apify_event("blueprint-query", 1)
@@ -129,8 +180,13 @@ def handle_tool_call(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 "title": cert["title"],
                 "duration_min": cert["duration_min"],
                 "pass_pct": cert["pass_pct"],
+                "exam_fee_usd": EXAM_FEES_USD.get(cert["slug"], 150),
                 "domains": cert["domains"],
-                "free_simulator_url": f"https://gabhack.github.io/cloudcert-lab/?exam={cert['slug']}&mode=study",
+                "guide_url": cert.get("guide_url", f"https://gabhack.github.io/cloudcert-lab/exams/{cert['slug']}/"),
+                "free_simulator_url": cert.get(
+                    "free_simulator_url",
+                    f"https://gabhack.github.io/cloudcert-lab/?exam={cert['slug']}&mode=study",
+                ),
                 "pro_vault_url": "https://gabbler407.gumroad.com/l/cloudcert-lab-pro",
             },
         }
@@ -164,6 +220,42 @@ def handle_tool_call(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         charge = charge_apify_event("scenario-search", max(1, len(compact))) if compact else {"billed": False}
         return {"ok": True, "charge": charge, "exam": cert["code"], "count": len(compact), "scenarios": compact}
 
+    if name == "calculate_pass_readiness":
+        cert = resolve_cert(arguments.get("exam", ""), include_extra=True)
+        if not cert:
+            return {"ok": False, "error": "Unknown exam code or slug. Call list_cloud_certifications first."}
+        try:
+            score = float(arguments["current_score_pct"])
+            days = int(arguments["days_until_exam"])
+            hours = float(arguments["study_hours_per_week"])
+        except (KeyError, TypeError, ValueError):
+            return {"ok": False, "error": "current_score_pct, days_until_exam, and study_hours_per_week are required numeric fields."}
+        if not (0 <= score <= 100 and 1 <= days <= 180 and 1 <= hours <= 60):
+            return {"ok": False, "error": "Inputs out of valid bounds (score 0-100, days 1-180, hours 1-60)."}
+
+        total_hours = (days / 7.0) * hours
+        projected_gain = min(22, round(total_hours * 0.65))
+        projected_score = min(98, round(score + projected_gain))
+        pass_pct = cert["pass_pct"]
+        pass_prob = max(12, min(97, round(50 + (projected_score - pass_pct) * 3.1)))
+        fee_usd = EXAM_FEES_USD.get(cert["slug"], 150)
+        daily_qs = max(15, min(65, -(-260 // max(4, days))))
+        status = "READY" if pass_prob >= 80 else ("BORDERLINE" if pass_prob >= 60 else "HIGH_RETAKE_RISK")
+        charge = charge_apify_event("blueprint-query", 1)
+        return {
+            "ok": True,
+            "charge": charge,
+            "exam": cert["code"],
+            "pass_probability_pct": pass_prob,
+            "projected_score_pct": projected_score,
+            "passing_bar_pct": pass_pct,
+            "status": status,
+            "exam_fee_at_risk_usd": fee_usd,
+            "recommended_daily_questions": daily_qs,
+            "calculator_url": f"https://gabhack.github.io/cloudcert-lab/?tool=calculator&cert={cert['slug']}",
+            "pro_vault_url": "https://gabbler407.gumroad.com/l/cloudcert-lab-pro",
+        }
+
     return {"ok": False, "error": f"Unknown tool: {name}"}
 
 
@@ -179,7 +271,7 @@ def handle_mcp_rpc(req: dict[str, Any]) -> dict[str, Any]:
             "result": {
                 "protocolVersion": "2025-03-26",
                 "capabilities": {"tools": {}},
-                "serverInfo": {"name": "cloud-cert-intelligence-mcp", "version": "1.0.0"},
+                "serverInfo": {"name": "cloud-cert-intelligence-mcp", "version": "1.1.0"},
             },
         }
     if method == "tools/list":
