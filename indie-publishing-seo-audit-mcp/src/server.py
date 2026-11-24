@@ -40,6 +40,21 @@ TOOLS = [
             "required": ["title", "subtitle"],
         },
     },
+    {
+        "name": "audit_gumroad_cro_listing",
+        "description": "Audit a Gumroad digital product listing against 2026 CRO best practices: outcome hook title, value-stack price anchor, free sample/tier presence, deliverable bullets, and trust signals.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string"},
+                "description": {"type": "string"},
+                "price_usd": {"type": "number"},
+                "anchor_price_usd": {"type": "number", "default": 0},
+                "has_free_sample": {"type": "boolean", "default": False},
+            },
+            "required": ["title", "description", "price_usd"],
+        },
+    },
 ]
 
 BANNED_KDP = {"free", "bestseller", "best seller", "discount", "cheap", "kindle unlimited", "sale", "new"}
@@ -118,6 +133,46 @@ def handle_tool_call(name: str, args: dict[str, Any]) -> dict[str, Any]:
             "passed": len(issues) == 0,
         }
 
+    if name == "audit_gumroad_cro_listing":
+        title = (args.get("title") or "").strip()
+        desc = (args.get("description") or "").strip()
+        price = args.get("price_usd")
+        anchor = float(args.get("anchor_price_usd") or 0)
+        has_free_sample = bool(args.get("has_free_sample", False))
+        if not title or not desc or price is None or float(price) < 0:
+            return {"ok": False, "error": "Provide non-empty title, description, and non-negative price_usd."}
+
+        price = float(price)
+        issues = []
+        tips = []
+        if len(title) < 18 or len(title) > 90:
+            issues.append(f"Title length ({len(title)} chars) should be 18–90 chars with an outcome-focused hook.")
+        if not re.search(r"\d", title):
+            tips.append("Include a concrete deliverable count or metric in the title (e.g., '2,340 Scenarios', '50+ Templates').")
+        bullets = len(re.findall(r"(?m)^\s*[-*✓•]", desc))
+        if bullets < 3:
+            issues.append(f"Only {bullets} bullet points detected in description; add >=3 outcome-oriented 'What's Inside' bullets.")
+        if price > 0 and anchor <= price:
+            issues.append("Missing value-stack anchor_price_usd > price_usd (e.g., $449 value -> $19.99) to lift perceived savings.")
+        if not has_free_sample:
+            tips.append("Offer a free sample / PWYW tier or live diagnostic to capture cold traffic emails for follow-up upsells.")
+        if not re.search(r"(instant|lifetime|refund|guarantee|no subscription|one-time)", desc.lower()):
+            tips.append("Add friction-reducing trust copy ('instant delivery', 'one-time payment', 'zero subscription').")
+
+        score = max(0, 100 - len(issues) * 18 - len(tips) * 6)
+        return {
+            "ok": True,
+            "charge": charge_event("seo-audit"),
+            "score": score,
+            "price_usd": price,
+            "anchor_price_usd": anchor,
+            "savings_pct": round((1 - price / anchor) * 100) if anchor > price > 0 else 0,
+            "bullet_count": bullets,
+            "issues": issues,
+            "recommendations": tips,
+            "passed": len(issues) == 0,
+        }
+
     return {"ok": False, "error": f"Unknown tool: {name}"}
 
 
@@ -126,7 +181,7 @@ def handle_mcp_rpc(req: dict[str, Any]) -> dict[str, Any]:
     method = req.get("method", "")
     params = req.get("params") or {}
     if method == "initialize":
-        return {"jsonrpc": "2.0", "id": req_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "indie-publishing-seo-audit-mcp", "version": "1.0.0"}}}
+        return {"jsonrpc": "2.0", "id": req_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "indie-publishing-seo-audit-mcp", "version": "1.1.0"}}}
     if method == "tools/list":
         return {"jsonrpc": "2.0", "id": req_id, "result": {"tools": TOOLS}}
     if method == "tools/call":
