@@ -7,6 +7,7 @@
   "usesStandbyMode": true,
   "webServerMcpPath": "/mcp",
   "input": "./input_schema.json",
+  "output": "./output_schema.json",
   "readme": "../README.md",
   "dockerfile": "../Dockerfile"
 }

@@ -1,0 +1,14 @@
+{
+  "actorOutputSchemaVersion": 1,
+  "title": "Indie Publishing SEO & CRO Audit Output",
+  "description": "Structured compliance score, detected issues, and optimization tips for KDP, Udemy, or Gumroad.",
+  "type": "object",
+  "properties": {
+    "results": {
+      "type": "string",
+      "title": "Structured Audit Results Dataset",
+      "description": "Dataset containing the SEO/CRO audit JSON payload.",
+      "template": "{{links.apiDefaultDatasetUrl}}/items"
+    }
+  }
+}

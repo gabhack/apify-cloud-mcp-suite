@@ -1,0 +1,14 @@
+{
+  "actorOutputSchemaVersion": 1,
+  "title": "Cloud FinOps Cost Estimate Output",
+  "description": "Structured monthly USD cost breakdown and FinOps recommendations.",
+  "type": "object",
+  "properties": {
+    "results": {
+      "type": "string",
+      "title": "Structured Cost Estimate Dataset",
+      "description": "Dataset containing the serverless or multi-cloud LLM monthly cost comparison.",
+      "template": "{{links.apiDefaultDatasetUrl}}/items"
+    }
+  }
+}

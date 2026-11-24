@@ -1,0 +1,14 @@
+{
+  "actorOutputSchemaVersion": 1,
+  "title": "CloudCert Intelligence Output",
+  "description": "Structured JSON blueprint, scenario drill, or pass-readiness risk calculation.",
+  "type": "object",
+  "properties": {
+    "results": {
+      "type": "string",
+      "title": "Structured JSON Output Dataset",
+      "description": "Dataset containing the structured certification intelligence JSON payload.",
+      "template": "{{links.apiDefaultDatasetUrl}}/items"
+    }
+  }
+}
