@@ -1,0 +1,34 @@
+{
+  "title": "CloudCert Intelligence MCP Input",
+  "description": "Invoke any CloudCert Intelligence tool in Standard Run mode, or connect via Streamable HTTP MCP at /mcp in Standby mode.",
+  "type": "object",
+  "schemaVersion": 1,
+  "properties": {
+    "tool": {
+      "title": "Tool Name",
+      "type": "string",
+      "description": "MCP tool to execute in standard run mode.",
+      "default": "get_exam_blueprint",
+      "enum": [
+        "list_cloud_certifications",
+        "get_exam_blueprint",
+        "search_sample_scenarios",
+        "calculate_pass_readiness"
+      ],
+      "editor": "select"
+    },
+    "exam": {
+      "title": "Certification Code or Slug",
+      "type": "string",
+      "description": "Target certification code or slug (e.g. aws-dva-c03, aws-aip-c01, azure-ai-901, gcp-genai-leader, aws-saa-c03).",
+      "default": "aws-dva-c03",
+      "editor": "textfield"
+    },
+    "keyword": {
+      "title": "Optional Search Keyword",
+      "type": "string",
+      "description": "Topic filter when using search_sample_scenarios (e.g. Bedrock, Foundry, IAM, SnapStart).",
+      "editor": "textfield"
+    }
+  }
+}

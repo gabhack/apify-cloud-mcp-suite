@@ -2,9 +2,11 @@
   "actorSpecification": 1,
   "name": "cloud-finops-cost-estimator-mcp",
   "title": "Cloud FinOps & AI Token Cost Estimator MCP Server (AWS, Azure, GCP)",
-  "description": "Lightweight Pay-Per-Event MCP Server for coding and architecture agents (Cursor, Claude, n8n, Make). Estimates monthly AWS, Azure, and Google Cloud serverless/container/LLM infrastructure costs and flags FinOps optimizations with concise JSON output.",
-  "version": "1.0",
+  "description": "Lightweight Pay-Per-Event MCP Server for coding and architecture agents (Cursor, Claude, n8n, Make). Estimates monthly AWS, Azure, and Google Cloud serverless/LLM infrastructure costs and flags FinOps optimizations with concise JSON output.",
+  "version": "1.1",
   "usesStandbyMode": true,
   "webServerMcpPath": "/mcp",
-  "dockerfile": "./Dockerfile"
+  "input": "./input_schema.json",
+  "readme": "../README.md",
+  "dockerfile": "../Dockerfile"
 }

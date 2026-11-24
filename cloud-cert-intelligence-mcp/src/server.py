@@ -1,17 +1,21 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Cloud Certification & Exam Blueprint Intelligence MCP Server (Apify Standby / Streamable HTTP).
-Follows 2026 Apify Store MCP best practices:
-  - Concise, context-window-friendly JSON payloads (zero HTML dumps)
-  - Strict input validation BEFORE billing hook (zero agent guessing-loop bill shock)
-  - Supports JSON-RPC 2.0 MCP methods: initialize, tools/list, tools/call
+Cloud Certification & Exam Blueprint Intelligence MCP Server (Apify Standby + Actor Run).
+Supports:
+  - Apify Standby Streamable HTTP MCP (/mcp JSON-RPC 2.0 + GET / readiness probe)
+  - Apify Pay-Per-Event v2 real billing (POST /v2/actor-runs/:runId/charge with Idempotency-Key & requestId)
+  - Apify Standard Run mode (reads INPUT, pushes result to default dataset, exits 0)
+  - Strict input validation BEFORE billing hook
 """
 
 from __future__ import annotations
 
+import datetime
 import json
 import os
+import urllib.request
+import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -19,7 +23,7 @@ from typing import Any
 DATA_DIR = Path(
     os.environ.get(
         "CLOUDCERT_DATA_DIR",
-        "/Users/jairo.nino/Downloads/ultra-money-factory/motor1-cloud-simulator/data",
+        str(Path(__file__).resolve().parent.parent / "data"),
     )
 )
 
@@ -39,13 +43,13 @@ TOOLS = [
     },
     {
         "name": "get_exam_blueprint",
-        "description": "Return official 2026-2027 exam blueprint domains, pacing, passing benchmark, and official simulator URL for a given certification slug or exam code (e.g. AI-901, AIF-C01, SAA-C03).",
+        "description": "Return official 2026-2027 exam blueprint domains, pacing, passing benchmark, and official simulator URL for a given certification slug or exam code (e.g. AI-901, DVA-C03, AIP-C01, AIF-C01, SAA-C03).",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "exam": {
                     "type": "string",
-                    "description": "Exam slug or code (e.g. azure-ai-901, AI-901, aws-aif-c01, SAA-C03)",
+                    "description": "Exam slug or code (e.g. azure-ai-901, AI-901, aws-dva-c03, AIP-C01, SAA-C03)",
                 }
             },
             "required": ["exam"],
@@ -135,15 +139,36 @@ def resolve_cert(exam_query: str, include_extra: bool = False) -> dict[str, Any]
     return None
 
 
-def charge_apify_event(event_name: str, count: int = 1) -> dict[str, Any]:
-    """
-    Pay-Per-Event billing hook. Only invoked AFTER input validation & payload generation succeed.
-    In Apify Standby runtime, wires into Actor.charge(event_name, count=count).
-    """
-    return {"event": event_name, "count": count, "billed": bool(os.environ.get("APIFY_IS_AT_HOME"))}
+def charge_apify_event(event_name: str, count: int = 1, request_id: str | None = None) -> dict[str, Any]:
+    """Real Apify Pay-Per-Event v2 billing hook invoked strictly AFTER validation succeeds."""
+    run_id = os.environ.get("APIFY_ACTOR_RUN_ID")
+    token = os.environ.get("APIFY_TOKEN")
+    api_base = os.environ.get("APIFY_API_BASE_URL", "https://api.apify.com").rstrip("/")
+    if not (os.environ.get("APIFY_IS_AT_HOME") and run_id and token):
+        return {"event": event_name, "count": count, "billed": False}
+
+    payload: dict[str, Any] = {"eventName": event_name, "count": int(count)}
+    if request_id:
+        payload["requestId"] = request_id
+    idem = f"{datetime.datetime.now(datetime.timezone.utc).isoformat()}-{uuid.uuid4().hex[:10]}"
+    req = urllib.request.Request(
+        f"{api_base}/v2/actor-runs/{run_id}/charge",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "Idempotency-Key": idem,
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=8) as r:
+            return {"event": event_name, "count": count, "billed": 200 <= r.status < 300, "http": r.status}
+    except Exception as exc:
+        return {"event": event_name, "count": count, "billed": False, "note": str(exc)[:120]}
 
 
-def handle_tool_call(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+def handle_tool_call(name: str, arguments: dict[str, Any], request_id: str | None = None) -> dict[str, Any]:
     if name == "list_cloud_certifications":
         vendor = (arguments.get("vendor") or "").strip().lower()
         certs = load_catalog()
@@ -162,14 +187,14 @@ def handle_tool_call(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             }
             for c in certs
         ]
-        charge = charge_apify_event("blueprint-query", 1)
+        charge = charge_apify_event("blueprint-query", 1, request_id)
         return {"ok": True, "charge": charge, "certifications": summary}
 
     if name == "get_exam_blueprint":
         cert = resolve_cert(arguments.get("exam", ""), include_extra=True)
         if not cert:
             return {"ok": False, "error": "Unknown exam code or slug. Call list_cloud_certifications first."}
-        charge = charge_apify_event("blueprint-query", 1)
+        charge = charge_apify_event("blueprint-query", 1, request_id)
         return {
             "ok": True,
             "charge": charge,
@@ -217,7 +242,7 @@ def handle_tool_call(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             }
             for q in qs[:limit]
         ]
-        charge = charge_apify_event("scenario-search", max(1, len(compact))) if compact else {"billed": False}
+        charge = charge_apify_event("scenario-search", max(1, len(compact)), request_id) if compact else {"billed": False}
         return {"ok": True, "charge": charge, "exam": cert["code"], "count": len(compact), "scenarios": compact}
 
     if name == "calculate_pass_readiness":
@@ -241,7 +266,7 @@ def handle_tool_call(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         fee_usd = EXAM_FEES_USD.get(cert["slug"], 150)
         daily_qs = max(15, min(65, -(-260 // max(4, days))))
         status = "READY" if pass_prob >= 80 else ("BORDERLINE" if pass_prob >= 60 else "HIGH_RETAKE_RISK")
-        charge = charge_apify_event("blueprint-query", 1)
+        charge = charge_apify_event("blueprint-query", 1, request_id)
         return {
             "ok": True,
             "charge": charge,
@@ -259,11 +284,15 @@ def handle_tool_call(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
     return {"ok": False, "error": f"Unknown tool: {name}"}
 
 
-def handle_mcp_rpc(req: dict[str, Any]) -> dict[str, Any]:
+def handle_mcp_rpc(req: dict[str, Any], request_id: str | None = None) -> dict[str, Any] | None:
     req_id = req.get("id")
     method = req.get("method", "")
     params = req.get("params") or {}
 
+    if method == "notifications/initialized":
+        return None
+    if method == "ping":
+        return {"jsonrpc": "2.0", "id": req_id, "result": {}}
     if method == "initialize":
         return {
             "jsonrpc": "2.0",
@@ -271,13 +300,13 @@ def handle_mcp_rpc(req: dict[str, Any]) -> dict[str, Any]:
             "result": {
                 "protocolVersion": "2025-03-26",
                 "capabilities": {"tools": {}},
-                "serverInfo": {"name": "cloud-cert-intelligence-mcp", "version": "1.1.0"},
+                "serverInfo": {"name": "cloud-cert-intelligence-mcp", "version": "1.2.0"},
             },
         }
     if method == "tools/list":
         return {"jsonrpc": "2.0", "id": req_id, "result": {"tools": TOOLS}}
     if method == "tools/call":
-        res = handle_tool_call(params.get("name", ""), params.get("arguments") or {})
+        res = handle_tool_call(params.get("name", ""), params.get("arguments") or {}, request_id)
         return {
             "jsonrpc": "2.0",
             "id": req_id,
@@ -290,9 +319,17 @@ def handle_mcp_rpc(req: dict[str, Any]) -> dict[str, Any]:
 
 
 class McpHandler(BaseHTTPRequestHandler):
+    def do_OPTIONS(self) -> None:
+        self.send_response(204)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, Mcp-Session-Id")
+        self.end_headers()
+
     def do_GET(self) -> None:
-        if self.path in ("/", "/health"):
-            body = json.dumps({"status": "ok", "server": "cloud-cert-intelligence-mcp"}).encode("utf-8")
+        path = self.path.split("?", 1)[0]
+        if path in ("/", "/health"):
+            body = json.dumps({"status": "ok", "server": "cloud-cert-intelligence-mcp", "version": "1.2.0", "mcp_path": "/mcp"}).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
@@ -302,22 +339,70 @@ class McpHandler(BaseHTTPRequestHandler):
         self.send_error(404)
 
     def do_POST(self) -> None:
-        if self.path != "/mcp":
+        path = self.path.split("?", 1)[0]
+        if path not in ("/mcp", "/"):
             self.send_error(404)
             return
         length = int(self.headers.get("Content-Length", "0"))
         raw = self.rfile.read(length)
         req = json.loads(raw.decode("utf-8"))
-        resp = handle_mcp_rpc(req)
+        req_id_hdr = self.headers.get("X-Actor-Request-ID")
+        resp = handle_mcp_rpc(req, req_id_hdr)
+        if resp is None:
+            self.send_response(202)
+            self.end_headers()
+            return
         body = json.dumps(resp, ensure_ascii=False).encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
+        self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
 
 
+def run_standard_actor() -> None:
+    """Standard Apify Actor Run execution mode (non-Standby): reads INPUT, runs tool, pushes dataset item."""
+    api_base = os.environ.get("APIFY_API_BASE_URL", "https://api.apify.com").rstrip("/")
+    token = os.environ.get("APIFY_TOKEN", "")
+    kv_id = os.environ.get("APIFY_DEFAULT_KEY_VALUE_STORE_ID", "")
+    ds_id = os.environ.get("APIFY_DEFAULT_DATASET_ID", "")
+
+    inp: dict[str, Any] = {}
+    if token and kv_id:
+        try:
+            with urllib.request.urlopen(f"{api_base}/v2/key-value-stores/{kv_id}/records/INPUT?token={token}", timeout=8) as r:
+                inp = json.loads(r.read().decode("utf-8")) or {}
+        except Exception:
+            inp = {}
+
+    tool = inp.get("tool") or "get_exam_blueprint"
+    arguments = inp.get("arguments")
+    if not isinstance(arguments, dict):
+        arguments = {k: v for k, v in inp.items() if k != "tool"}
+    if tool == "get_exam_blueprint" and not arguments.get("exam"):
+        arguments["exam"] = "aws-dva-c03"
+    result = handle_tool_call(tool, arguments)
+
+    if token and ds_id:
+        req = urllib.request.Request(
+            f"{api_base}/v2/datasets/{ds_id}/items?token={token}",
+            data=json.dumps([result], ensure_ascii=False).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=10) as r:
+            print(f"Pushed dataset item (HTTP {r.status}): tool={tool}, ok={result.get('ok')}")
+    else:
+        print(json.dumps(result, ensure_ascii=False))
+
+
 if __name__ == "__main__":
-    port = int(os.environ.get("ACTOR_WEB_SERVER_PORT", os.environ.get("PORT", "8080")))
-    print(f"CloudCert Intelligence MCP listening on :{port}/mcp")
-    ThreadingHTTPServer(("0.0.0.0", port), McpHandler).serve_forever()
+    is_at_home = bool(os.environ.get("APIFY_IS_AT_HOME"))
+    is_standby = os.environ.get("APIFY_META_ORIGIN", "").upper() == "STANDBY"
+    if is_at_home and not is_standby:
+        run_standard_actor()
+    else:
+        port = int(os.environ.get("ACTOR_WEB_SERVER_PORT", os.environ.get("PORT", "8080")))
+        print(f"CloudCert Intelligence MCP v1.2.0 listening on :{port}/mcp", flush=True)
+        ThreadingHTTPServer(("0.0.0.0", port), McpHandler).serve_forever()

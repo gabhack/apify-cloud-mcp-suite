@@ -1,0 +1,37 @@
+{
+  "title": "Cloud FinOps & LLM Cost Estimator Input",
+  "description": "Estimate monthly AWS serverless or Multi-Cloud LLM token spend (AWS Bedrock, Azure Foundry, Google Gemini).",
+  "type": "object",
+  "schemaVersion": 1,
+  "properties": {
+    "tool": {
+      "title": "Tool Name",
+      "type": "string",
+      "description": "MCP tool to run in standard Actor mode.",
+      "default": "estimate_llm_monthly_cost",
+      "enum": [
+        "estimate_llm_monthly_cost",
+        "estimate_serverless_workload"
+      ],
+      "editor": "select"
+    },
+    "monthly_calls": {
+      "title": "Monthly LLM Calls",
+      "type": "integer",
+      "description": "Number of LLM API calls per month.",
+      "default": 100000
+    },
+    "avg_input_tokens": {
+      "title": "Average Input Tokens per Call",
+      "type": "integer",
+      "description": "Average prompt tokens per call.",
+      "default": 1200
+    },
+    "avg_output_tokens": {
+      "title": "Average Output Tokens per Call",
+      "type": "integer",
+      "description": "Average completion tokens per call.",
+      "default": 400
+    }
+  }
+}

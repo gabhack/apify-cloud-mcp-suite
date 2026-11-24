@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Cloud FinOps & AI Token Cost Estimator MCP Server (Apify Standby / Streamable HTTP).
-Zero external API dependencies · Strict input validation prior to billing hook.
+Cloud FinOps & AI Token Cost Estimator MCP Server (Apify Standby + Standard Actor Run).
+Zero external API dependencies · Real Apify Pay-Per-Event v2 billing · Strict pre-billing validation.
 """
 
 from __future__ import annotations
 
+import datetime
 import json
 import os
+import urllib.request
+import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
-# Reference on-demand 2026 baseline rates (USD)
 LLM_RATES_PER_1M = {
     "gemini-2.5-flash": {"in": 0.15, "out": 0.60, "provider": "Google Cloud"},
     "gemini-2.5-pro": {"in": 1.25, "out": 10.00, "provider": "Google Cloud"},
@@ -54,11 +56,35 @@ TOOLS = [
 ]
 
 
-def charge_event(event_name: str, count: int = 1) -> dict[str, Any]:
-    return {"event": event_name, "count": count, "billed": bool(os.environ.get("APIFY_IS_AT_HOME"))}
+def charge_event(event_name: str, count: int = 1, request_id: str | None = None) -> dict[str, Any]:
+    run_id = os.environ.get("APIFY_ACTOR_RUN_ID")
+    token = os.environ.get("APIFY_TOKEN")
+    api_base = os.environ.get("APIFY_API_BASE_URL", "https://api.apify.com").rstrip("/")
+    if not (os.environ.get("APIFY_IS_AT_HOME") and run_id and token):
+        return {"event": event_name, "count": count, "billed": False}
+
+    payload: dict[str, Any] = {"eventName": event_name, "count": int(count)}
+    if request_id:
+        payload["requestId"] = request_id
+    idem = f"{datetime.datetime.now(datetime.timezone.utc).isoformat()}-{uuid.uuid4().hex[:10]}"
+    req = urllib.request.Request(
+        f"{api_base}/v2/actor-runs/{run_id}/charge",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "Idempotency-Key": idem,
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=8) as r:
+            return {"event": event_name, "count": count, "billed": 200 <= r.status < 300, "http": r.status}
+    except Exception as exc:
+        return {"event": event_name, "count": count, "billed": False, "note": str(exc)[:120]}
 
 
-def handle_tool_call(name: str, args: dict[str, Any]) -> dict[str, Any]:
+def handle_tool_call(name: str, args: dict[str, Any], request_id: str | None = None) -> dict[str, Any]:
     if name == "estimate_serverless_workload":
         reqs = int(args.get("monthly_requests", 0))
         if reqs <= 0:
@@ -86,7 +112,7 @@ def handle_tool_call(name: str, args: dict[str, Any]) -> dict[str, Any]:
 
         return {
             "ok": True,
-            "charge": charge_event("cost-estimate"),
+            "charge": charge_event("cost-estimate", 1, request_id),
             "estimate_usd": {
                 "lambda_requests": round(lambda_req_cost, 2),
                 "lambda_compute": round(lambda_compute_cost, 2),
@@ -119,7 +145,7 @@ def handle_tool_call(name: str, args: dict[str, Any]) -> dict[str, Any]:
         rows.sort(key=lambda r: r["monthly_usd"])
         return {
             "ok": True,
-            "charge": charge_event("cost-estimate"),
+            "charge": charge_event("cost-estimate", 1, request_id),
             "volume": {"input_millions": round(in_m, 3), "output_millions": round(out_m, 3)},
             "comparison": rows,
             "finops_tips": [
@@ -131,24 +157,36 @@ def handle_tool_call(name: str, args: dict[str, Any]) -> dict[str, Any]:
     return {"ok": False, "error": f"Unknown tool: {name}"}
 
 
-def handle_mcp_rpc(req: dict[str, Any]) -> dict[str, Any]:
+def handle_mcp_rpc(req: dict[str, Any], request_id: str | None = None) -> dict[str, Any] | None:
     req_id = req.get("id")
     method = req.get("method", "")
     params = req.get("params") or {}
+    if method == "notifications/initialized":
+        return None
+    if method == "ping":
+        return {"jsonrpc": "2.0", "id": req_id, "result": {}}
     if method == "initialize":
-        return {"jsonrpc": "2.0", "id": req_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "cloud-finops-cost-estimator-mcp", "version": "1.0.0"}}}
+        return {"jsonrpc": "2.0", "id": req_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "cloud-finops-cost-estimator-mcp", "version": "1.1.0"}}}
     if method == "tools/list":
         return {"jsonrpc": "2.0", "id": req_id, "result": {"tools": TOOLS}}
     if method == "tools/call":
-        res = handle_tool_call(params.get("name", ""), params.get("arguments") or {})
+        res = handle_tool_call(params.get("name", ""), params.get("arguments") or {}, request_id)
         return {"jsonrpc": "2.0", "id": req_id, "result": {"isError": not res.get("ok", False), "content": [{"type": "text", "text": json.dumps(res, ensure_ascii=False)}]}}
     return {"jsonrpc": "2.0", "id": req_id, "error": {"code": -32601, "message": f"Method not found: {method}"}}
 
 
 class Handler(BaseHTTPRequestHandler):
+    def do_OPTIONS(self) -> None:
+        self.send_response(204)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, Mcp-Session-Id")
+        self.end_headers()
+
     def do_GET(self) -> None:
-        if self.path in ("/", "/health"):
-            body = json.dumps({"status": "ok", "server": "cloud-finops-cost-estimator-mcp"}).encode("utf-8")
+        path = self.path.split("?", 1)[0]
+        if path in ("/", "/health"):
+            body = json.dumps({"status": "ok", "server": "cloud-finops-cost-estimator-mcp", "version": "1.1.0", "mcp_path": "/mcp"}).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
@@ -158,19 +196,66 @@ class Handler(BaseHTTPRequestHandler):
         self.send_error(404)
 
     def do_POST(self) -> None:
-        if self.path != "/mcp":
+        path = self.path.split("?", 1)[0]
+        if path not in ("/mcp", "/"):
             self.send_error(404)
             return
         raw = self.rfile.read(int(self.headers.get("Content-Length", "0")))
-        resp = handle_mcp_rpc(json.loads(raw.decode("utf-8")))
+        resp = handle_mcp_rpc(json.loads(raw.decode("utf-8")), self.headers.get("X-Actor-Request-ID"))
+        if resp is None:
+            self.send_response(202)
+            self.end_headers()
+            return
         body = json.dumps(resp, ensure_ascii=False).encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
+        self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
 
 
+def run_standard_actor() -> None:
+    api_base = os.environ.get("APIFY_API_BASE_URL", "https://api.apify.com").rstrip("/")
+    token = os.environ.get("APIFY_TOKEN", "")
+    kv_id = os.environ.get("APIFY_DEFAULT_KEY_VALUE_STORE_ID", "")
+    ds_id = os.environ.get("APIFY_DEFAULT_DATASET_ID", "")
+
+    inp: dict[str, Any] = {}
+    if token and kv_id:
+        try:
+            with urllib.request.urlopen(f"{api_base}/v2/key-value-stores/{kv_id}/records/INPUT?token={token}", timeout=8) as r:
+                inp = json.loads(r.read().decode("utf-8")) or {}
+        except Exception:
+            inp = {}
+
+    tool = inp.get("tool") or "estimate_llm_monthly_cost"
+    arguments = inp.get("arguments")
+    if not isinstance(arguments, dict):
+        arguments = {k: v for k, v in inp.items() if k != "tool"}
+    if tool == "estimate_llm_monthly_cost" and not arguments.get("monthly_calls"):
+        arguments = {"monthly_calls": 100000, "avg_input_tokens": 1200, "avg_output_tokens": 400}
+    result = handle_tool_call(tool, arguments)
+
+    if token and ds_id:
+        req = urllib.request.Request(
+            f"{api_base}/v2/datasets/{ds_id}/items?token={token}",
+            data=json.dumps([result], ensure_ascii=False).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=10) as r:
+            print(f"Pushed dataset item (HTTP {r.status}): tool={tool}, ok={result.get('ok')}")
+    else:
+        print(json.dumps(result, ensure_ascii=False))
+
+
 if __name__ == "__main__":
-    port = int(os.environ.get("ACTOR_WEB_SERVER_PORT", os.environ.get("PORT", "8080")))
-    ThreadingHTTPServer(("0.0.0.0", port), Handler).serve_forever()
+    is_at_home = bool(os.environ.get("APIFY_IS_AT_HOME"))
+    is_standby = os.environ.get("APIFY_META_ORIGIN", "").upper() == "STANDBY"
+    if is_at_home and not is_standby:
+        run_standard_actor()
+    else:
+        port = int(os.environ.get("ACTOR_WEB_SERVER_PORT", os.environ.get("PORT", "8080")))
+        print(f"Cloud FinOps MCP v1.1.0 listening on :{port}/mcp", flush=True)
+        ThreadingHTTPServer(("0.0.0.0", port), Handler).serve_forever()

@@ -1,10 +1,12 @@
 {
   "actorSpecification": 1,
   "name": "indie-publishing-seo-audit-mcp",
-  "title": "Indie Publishing & Programmatic SEO Auditor MCP (KDP, Udemy, Gumroad, Static Sites)",
-  "description": "Pay-Per-Event MCP Server for indie authors, course creators, and programmatic SEO builders. Validates Amazon KDP 7-box backend keyword duplication, Udemy 60/120-char title/subtitle limits, and generates Google-compliant JSON-LD (Course + FAQPage) and llms.txt templates.",
-  "version": "1.1",
+  "title": "Indie Publishing & Programmatic SEO Auditor MCP (KDP, Udemy, Gumroad)",
+  "description": "Pay-Per-Event MCP Server for indie authors, Udemy course creators, and Gumroad digital product sellers. Audits Amazon KDP 7-box backend keywords, Udemy 60/120-char limits, and Gumroad CRO listings.",
+  "version": "1.2",
   "usesStandbyMode": true,
   "webServerMcpPath": "/mcp",
-  "dockerfile": "./Dockerfile"
+  "input": "./input_schema.json",
+  "readme": "../README.md",
+  "dockerfile": "../Dockerfile"
 }

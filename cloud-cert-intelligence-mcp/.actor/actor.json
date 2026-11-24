@@ -2,12 +2,11 @@
   "actorSpecification": 1,
   "name": "cloud-cert-intelligence-mcp",
   "title": "Cloud Certification & Exam Blueprint Intelligence MCP Server (AWS, Azure, GCP)",
-  "description": "Lightweight Pay-Per-Event MCP Server for AI coding and study agents (Cursor, Claude, n8n, Make). Returns structured 2026-2027 AWS, Microsoft Azure AI-901, and Google Cloud GenAI Leader exam blueprints, domain weights, certification comparisons, and vetted scenario questions with zero HTML bloat.",
-  "version": "1.0",
+  "description": "Lightweight Pay-Per-Event MCP Server for AI coding and study agents (Cursor, Claude, n8n, Make). Returns structured 2026-2027 AWS (DVA-C03, AIP-C01, AIF-C01, MLA-C01, DEA-C01, SAA-C03, CLF-C02), Microsoft Azure AI-901, and Google Cloud GenAI Leader exam blueprints, vetted scenario questions, and pass-readiness risk calculations.",
+  "version": "1.2",
   "usesStandbyMode": true,
   "webServerMcpPath": "/mcp",
-  "meta": {
-    "templateId": "python-mcp-standby"
-  },
-  "dockerfile": "./Dockerfile"
+  "input": "./input_schema.json",
+  "readme": "../README.md",
+  "dockerfile": "../Dockerfile"
 }

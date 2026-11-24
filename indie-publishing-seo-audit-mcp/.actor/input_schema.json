@@ -1,0 +1,38 @@
+{
+  "title": "Indie Publishing & SEO Auditor Input",
+  "description": "Audit Amazon KDP 7-box backend keywords, Udemy title/subtitle limits, or Gumroad CRO listings.",
+  "type": "object",
+  "schemaVersion": 1,
+  "properties": {
+    "tool": {
+      "title": "Audit Tool",
+      "type": "string",
+      "description": "Select which publishing compliance audit to execute.",
+      "default": "audit_kdp_keywords",
+      "enum": [
+        "audit_kdp_keywords",
+        "audit_udemy_listing",
+        "audit_gumroad_cro_listing"
+      ],
+      "editor": "select"
+    },
+    "title": {
+      "title": "Book / Course / Product Title",
+      "type": "string",
+      "description": "Main listing title to audit.",
+      "default": "AWS Certified Developer Associate (DVA-C03) Practice Exams",
+      "editor": "textfield"
+    },
+    "keyword_boxes": {
+      "title": "KDP Backend Keyword Boxes (up to 7)",
+      "type": "array",
+      "description": "Up to 7 Amazon KDP backend keyword boxes (50 chars max each).",
+      "default": [
+        "amazon q developer",
+        "bedrock guardrails",
+        "lambda snapstart"
+      ],
+      "editor": "stringList"
+    }
+  }
+}
