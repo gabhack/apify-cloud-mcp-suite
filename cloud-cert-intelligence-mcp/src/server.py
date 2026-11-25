@@ -97,6 +97,27 @@ EXAM_FEES_USD = {
     "aws-aip-c01": 300,
 }
 
+UDEMY_COURSE_URLS = {
+    "azure-ai-901": "https://www.udemy.com/course/microsoft-azure-ai-fundamentals-ai-901-practice-exams-2026-j/",
+    "gcp-genai-leader": "https://www.udemy.com/course/google-cloud-generative-ai-leader-practice-exams-2026-2027/",
+    "aws-aif-c01": "https://www.udemy.com/course/aws-certified-ai-practitioner-aif-c01-practice-exams-2026-mf/",
+    "aws-mla-c01": "https://www.udemy.com/course/aws-machine-learning-engineer-associate-mla-c01-mock-tests/",
+    "aws-dea-c01": "https://www.udemy.com/course/aws-certified-data-engineer-associate-dea-c01-mock-exams-d/",
+    "aws-dva-c02": "https://www.udemy.com/course/aws-certified-developer-associate-dva-c02-practice-exams-dx/",
+    "aws-saa-c03": "https://www.udemy.com/course/aws-solutions-architect-associate-saa-c03-practice-exams-m/",
+    "aws-clf-c02": "https://www.udemy.com/course/aws-certified-cloud-practitioner-clf-c02-practice-exams-eg/",
+    "aws-dva-c03": "https://www.udemy.com/course/aws-certified-developer-associate-dva-c03-practice-exams-p/",
+}
+
+KDP_BOOK_URLS = {
+    "azure-ai-901": "https://www.amazon.com/dp/B0HS93MZC7",
+    "gcp-genai-leader": "https://www.amazon.com/dp/B0HSL1MYYM",
+    "aws-aif-c01": "https://www.amazon.com/dp/B0HQXNM3VY",
+    "aws-mla-c01": "https://www.amazon.com/dp/B0HS1GKQSQ",
+    "aws-saa-c03": "https://www.amazon.com/dp/B0HRVB8PZ3",
+    "aws-clf-c02": "https://www.amazon.com/dp/B0HQ8ZT44Y",
+}
+
 EXTRA_BLUEPRINTS = {
     "aws-aip-c01": {
         "slug": "aws-aip-c01",
@@ -212,6 +233,8 @@ def handle_tool_call(name: str, arguments: dict[str, Any], request_id: str | Non
                     "free_simulator_url",
                     f"https://gabhack.github.io/cloudcert-lab/?exam={cert['slug']}&mode=study",
                 ),
+                "udemy_course_url": UDEMY_COURSE_URLS.get(cert["slug"], ""),
+                "kdp_book_url": KDP_BOOK_URLS.get(cert["slug"], "https://www.amazon.com/author/gabrieln"),
                 "pro_vault_url": "https://gabbler407.gumroad.com/l/cloudcert-lab-pro",
             },
         }
