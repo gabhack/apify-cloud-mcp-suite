@@ -1,0 +1,16 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.gabhack/apify-cloud-mcp-suite",
+  "description": "Three zero-dependency Streamable HTTP (/mcp) Standby MCP servers for Cloud Certifications (9 blueprints), AWS & LLM FinOps Cost Estimation, and Indie Publishing SEO/CRO Audits.",
+  "repository": {
+    "url": "https://github.com/gabhack/apify-cloud-mcp-suite",
+    "source": "github"
+  },
+  "version": "1.0.0",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "http://127.0.0.1:8080/mcp"
+    }
+  ]
+}
