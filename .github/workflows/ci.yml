@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile all Python MCP servers
+        run: |
+          python3 -m py_compile \
+            cloud-cert-intelligence-mcp/src/server.py \
+            cloud-finops-cost-estimator-mcp/src/server.py \
+            indie-publishing-seo-audit-mcp/src/server.py
+
+      - name: Validate JSON manifests, schemas, and data across all 3 actors
+        run: |
+          python3 - <<'EOF'
+          import json
+          from pathlib import Path
+
+          root = Path(".")
+          json_files = sorted(p for p in root.rglob("*.json") if ".git" not in p.parts)
+          assert json_files, "No JSON files found"
+          for path in json_files:
+              with path.open("r", encoding="utf-8") as f:
+                  data = json.load(f)
+              assert isinstance(data, (dict, list)), f"Unexpected JSON root in {path}"
+              print(f"OK JSON: {path}")
+
+          actors = [
+              "cloud-cert-intelligence-mcp",
+              "cloud-finops-cost-estimator-mcp",
+              "indie-publishing-seo-audit-mcp",
+          ]
+          required_actor_files = [
+              ".actor/actor.json",
+              ".actor/input_schema.json",
+              ".actor/output_schema.json",
+              ".actor/pay_per_event.json",
+          ]
+          for actor in actors:
+              for rel in required_actor_files:
+                  p = root / actor / rel
+                  assert p.exists(), f"Missing required schema file: {p}"
+                  payload = json.loads(p.read_text(encoding="utf-8"))
+                  if rel.endswith("pay_per_event.json"):
+                      assert "events" in payload and payload["events"], f"Missing events in {p}"
+                      for ev_name, ev in payload["events"].items():
+                          assert "eventPriceUsd" in ev and ev["eventPriceUsd"] > 0, f"Invalid price in {p}:{ev_name}"
+                  if rel.endswith("input_schema.json"):
+                      assert payload.get("type") == "object" and "properties" in payload, f"Invalid input_schema in {p}"
+          print(f"Validated {len(json_files)} JSON files and all 3 actor schemas cleanly.")
+          EOF

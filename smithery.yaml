@@ -1,0 +1,34 @@
+# Smithery configuration file: https://smithery.ai/docs/config#smitheryyaml
+
+startCommand:
+  type: http
+  configSchema:
+    type: object
+    required: []
+    properties:
+      actor:
+        type: string
+        default: cloud-cert-intelligence-mcp
+        enum:
+          - cloud-cert-intelligence-mcp
+          - cloud-finops-cost-estimator-mcp
+          - indie-publishing-seo-audit-mcp
+        title: MCP Server Actor
+        description: Select which of the 3 Standby Streamable HTTP (/mcp) servers to run.
+      port:
+        type: integer
+        default: 8080
+        title: Standby HTTP Port
+        description: Local port for the Streamable HTTP /mcp endpoint.
+  commandFunction:
+    |-
+    (config) => ({
+      command: "python3",
+      args: [`${config.actor || "cloud-cert-intelligence-mcp"}/src/server.py`],
+      env: {
+        PORT: String(config.port || 8080)
+      }
+    })
+  exampleConfig:
+    actor: cloud-cert-intelligence-mcp
+    port: 8080
